@@ -1,0 +1,586 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Johan's Hub",
+    LoadingTitle = "Johan's Hub",
+    LoadingSubtitle = "by Johan",
+    ConfigurationSaving = { Enabled = true, FolderName = "JohanHub", FileName = "Config" },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
+
+-- ========== SERVICES ==========
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local CurrentPrefix = "/"
+
+-- ========== STATE ==========
+local InfiniteJumpEnabled = false
+local TeleportActive = false
+local RainbowActive = false
+local NoclipEnabled = false
+local FireAnimActive = false
+local FakeTypingActive = false
+local WalkSpeedEnabled = false
+local JumpPowerEnabled = false
+local CmdBarEnabled = false
+local CurrentWalkSpeed = 16
+local CurrentJumpPower = 50
+
+local FireAnimationTrack = nil
+local UpdateLineColorsEvent = nil
+
+pcall(function()
+    UpdateLineColorsEvent = ReplicatedStorage:WaitForChild("DataEvents"):WaitForChild("UpdateLineColorsEvent", 5)
+end)
+
+pcall(function()
+    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local Humanoid = Character:WaitForChild("Humanoid")
+    local Animator = Humanoid:WaitForChild("Animator")
+    local FireFlailAnimation = game:GetService("ReplicatedFirst"):WaitForChild("CatchFire"):WaitForChild("FireFlailAnimation")
+    FireAnimationTrack = Animator:LoadAnimation(FireFlailAnimation)
+end)
+
+-- ========== HELPERS ==========
+local function RandomColor() return Color3.new(math.random(), math.random(), math.random()) end
+local function GenerateRandomColorSequence()
+    local Keypoints = {}
+    for i = 0, 1, 0.1 do
+        table.insert(Keypoints, ColorSequenceKeypoint.new(i, RandomColor()))
+    end
+    return ColorSequence.new(Keypoints)
+end
+
+local function StartRainbow()
+    RainbowActive = true
+    task.spawn(function()
+        while RainbowActive do
+            pcall(function()
+                if UpdateLineColorsEvent then
+                    UpdateLineColorsEvent:FireServer(GenerateRandomColorSequence())
+                end
+            end)
+            task.wait(1)
+        end
+    end)
+end
+local function StopRainbow() RainbowActive = false end
+
+local function StartFakeTyping()
+    FakeTypingActive = true
+    task.spawn(function()
+        while FakeTypingActive do
+            pcall(function() ReplicatedStorage.CharacterEvents.ChatTyping:FireServer("begin") end)
+            task.wait(2)
+        end
+    end)
+end
+local function StopFakeTyping()
+    FakeTypingActive = false
+    pcall(function() ReplicatedStorage.CharacterEvents.ChatTyping:FireServer("end") end)
+end
+
+-- Noclip loop
+RunService.Stepped:Connect(function()
+    if NoclipEnabled and LocalPlayer.Character then
+        for _, Part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if Part:IsA("BasePart") then Part.CanCollide = false end
+        end
+    end
+end)
+
+-- Infinite Jump
+UserInputService.JumpRequest:Connect(function()
+    if InfiniteJumpEnabled and LocalPlayer.Character then
+        local Hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if Hum then Hum:ChangeState("Jumping") end
+    end
+end)
+
+-- Teleport Z
+local function SetupTeleport(Char)
+    local HumanoidRootPart = Char:WaitForChild("HumanoidRootPart")
+    local Mouse = LocalPlayer:GetMouse()
+    Mouse.KeyDown:Connect(function(Key)
+        if Key == "z" and TeleportActive and Mouse.Target then
+            HumanoidRootPart.CFrame = CFrame.new(Mouse.Hit.p + Vector3.new(0, 5, 0))
+        end
+    end)
+end
+if LocalPlayer.Character then SetupTeleport(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(SetupTeleport)
+
+-- ========== DRAGGABLE TELEPORT BUTTON ==========
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TeleportButton"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local TPButton = Instance.new("TextButton")
+TPButton.Size = UDim2.new(0, 70, 0, 70)
+TPButton.Position = UDim2.new(0.8, 0, 0.7, 0)
+TPButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+TPButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TPButton.Text = "TP"
+TPButton.Font = Enum.Font.GothamBold
+TPButton.TextSize = 16
+TPButton.BorderSizePixel = 0
+TPButton.Visible = false
+TPButton.Parent = ScreenGui
+
+local TPCorner = Instance.new("UICorner")
+TPCorner.CornerRadius = UDim.new(1, 0)
+TPCorner.Parent = TPButton
+
+local TPStroke = Instance.new("UIStroke")
+TPStroke.Color = Color3.fromRGB(100, 100, 255)
+TPStroke.Thickness = 2
+TPStroke.Parent = TPButton
+
+local LockLabel = Instance.new("TextLabel")
+LockLabel.Size = UDim2.new(1, 0, 0.3, 0)
+LockLabel.Position = UDim2.new(0, 0, -0.35, 0)
+LockLabel.BackgroundTransparency = 1
+LockLabel.TextColor3 = Color3.fromRGB(180, 180, 255)
+LockLabel.Text = "🔓 Drag"
+LockLabel.Font = Enum.Font.GothamBold
+LockLabel.TextSize = 11
+LockLabel.Parent = TPButton
+
+local Dragging = false
+local DragLocked = false
+local DragStart = nil
+local StartPos = nil
+
+TPButton.InputBegan:Connect(function(input)
+    if DragLocked then return end
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Dragging = true
+        DragStart = input.Position
+        StartPos = TPButton.Position
+    end
+end)
+
+TPButton.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if Dragging and not DragLocked then
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+            local Delta = input.Position - DragStart
+            TPButton.Position = UDim2.new(
+                StartPos.X.Scale, StartPos.X.Offset + Delta.X,
+                StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y
+            )
+        end
+    end
+end)
+
+local PressTime = 0
+TPButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        PressTime = tick()
+    end
+end)
+TPButton.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if tick() - PressTime < 0.25 and TeleportActive then
+            local Mouse = LocalPlayer:GetMouse()
+            if Mouse.Target and LocalPlayer.Character then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Mouse.Hit.p + Vector3.new(0, 5, 0))
+            end
+        end
+    end
+end)
+
+local LockBtn = Instance.new("TextButton")
+LockBtn.Size = UDim2.new(0, 36, 0, 36)
+LockBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+LockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+LockBtn.Text = "🔓"
+LockBtn.Font = Enum.Font.GothamBold
+LockBtn.TextSize = 16
+LockBtn.BorderSizePixel = 0
+LockBtn.Visible = false
+LockBtn.Parent = ScreenGui
+
+local LockCorner = Instance.new("UICorner")
+LockCorner.CornerRadius = UDim.new(1, 0)
+LockCorner.Parent = LockBtn
+
+LockBtn.MouseButton1Click:Connect(function()
+    DragLocked = not DragLocked
+    if DragLocked then
+        LockBtn.Text = "🔒"
+        LockLabel.Text = "🔒 Locked"
+        TPStroke.Color = Color3.fromRGB(255, 80, 80)
+    else
+        LockBtn.Text = "🔓"
+        LockLabel.Text = "🔓 Drag"
+        TPStroke.Color = Color3.fromRGB(100, 100, 255)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if TPButton.Visible then
+        LockBtn.Position = UDim2.new(
+            TPButton.Position.X.Scale,
+            TPButton.Position.X.Offset + 74,
+            TPButton.Position.Y.Scale,
+            TPButton.Position.Y.Offset
+        )
+    end
+end)
+
+-- ========== COMMAND BAR GUI ==========
+local CmdBarGui = Instance.new("ScreenGui")
+CmdBarGui.Name = "CmdBar"
+CmdBarGui.ResetOnSpawn = false
+CmdBarGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+CmdBarGui.Enabled = false
+CmdBarGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local CmdFrame = Instance.new("Frame")
+CmdFrame.Size = UDim2.new(0, 300, 0, 44)
+CmdFrame.Position = UDim2.new(0.5, -150, 0.88, 0)
+CmdFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+CmdFrame.BorderSizePixel = 0
+CmdFrame.Parent = CmdBarGui
+
+local CmdFrameCorner = Instance.new("UICorner")
+CmdFrameCorner.CornerRadius = UDim.new(0, 10)
+CmdFrameCorner.Parent = CmdFrame
+
+local CmdFrameStroke = Instance.new("UIStroke")
+CmdFrameStroke.Color = Color3.fromRGB(100, 100, 255)
+CmdFrameStroke.Thickness = 1.5
+CmdFrameStroke.Parent = CmdFrame
+
+local PrefixLabel = Instance.new("TextLabel")
+PrefixLabel.Size = UDim2.new(0, 24, 1, 0)
+PrefixLabel.Position = UDim2.new(0, 8, 0, 0)
+PrefixLabel.BackgroundTransparency = 1
+PrefixLabel.TextColor3 = Color3.fromRGB(100, 100, 255)
+PrefixLabel.Text = "/"
+PrefixLabel.Font = Enum.Font.GothamBold
+PrefixLabel.TextSize = 18
+PrefixLabel.Parent = CmdFrame
+
+local CmdInput = Instance.new("TextBox")
+CmdInput.Size = UDim2.new(1, -44, 1, 0)
+CmdInput.Position = UDim2.new(0, 32, 0, 0)
+CmdInput.BackgroundTransparency = 1
+CmdInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+CmdInput.PlaceholderText = "type command..."
+CmdInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 120)
+CmdInput.Text = ""
+CmdInput.Font = Enum.Font.Gotham
+CmdInput.TextSize = 15
+CmdInput.TextXAlignment = Enum.TextXAlignment.Left
+CmdInput.ClearTextOnFocus = true
+CmdInput.Parent = CmdFrame
+
+local function SetCmdBar(state)
+    CmdBarEnabled = state
+    CmdBarGui.Enabled = state
+    if state then
+        CmdInput:CaptureFocus()
+    end
+end
+
+CmdInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed and CmdInput.Text ~= "" then
+        handleCommand(CmdInput.Text)
+        CmdInput.Text = ""
+    end
+    -- close after submitting or tapping outside
+    SetCmdBar(false)
+end)
+
+-- ========== COMMAND HANDLER ==========
+function handleCommand(msg)
+    local parts = msg:lower():match("^%s*(.-)%s*$"):split(" ")
+    local cmd = parts[1]
+
+    if cmd == "walkspeed" or cmd == "ws" then
+        local val = tonumber(parts[2])
+        if val then
+            CurrentWalkSpeed = math.clamp(val, 16, 1000)
+            WalkSpeedEnabled = true
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = CurrentWalkSpeed
+            end
+            Rayfield:Notify({ Title = "WalkSpeed", Content = "Set to " .. CurrentWalkSpeed, Duration = 2 })
+        end
+
+    elseif cmd == "jumppower" or cmd == "jp" then
+        local val = tonumber(parts[2])
+        if val then
+            CurrentJumpPower = math.clamp(val, 20, 1000)
+            JumpPowerEnabled = true
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = CurrentJumpPower
+            end
+            Rayfield:Notify({ Title = "JumpPower", Content = "Set to " .. CurrentJumpPower, Duration = 2 })
+        end
+
+    elseif cmd == "fireanimations" or cmd == "fireanims" then
+        FireAnimActive = true
+        if FireAnimationTrack then FireAnimationTrack:Play() end
+        Rayfield:Notify({ Title = "Fire Animation", Content = "Enabled", Duration = 2 })
+
+    elseif cmd == "unfireanimations" or cmd == "unfireanims" then
+        FireAnimActive = false
+        if FireAnimationTrack then FireAnimationTrack:Stop() end
+        Rayfield:Notify({ Title = "Fire Animation", Content = "Disabled", Duration = 2 })
+
+    elseif cmd == "faketyping" or cmd == "fy" then
+        StartFakeTyping()
+        Rayfield:Notify({ Title = "Fake Typing", Content = "Enabled", Duration = 2 })
+
+    elseif cmd == "unfaketyping" or cmd == "unfy" then
+        StopFakeTyping()
+        Rayfield:Notify({ Title = "Fake Typing", Content = "Disabled", Duration = 2 })
+
+    elseif cmd == "rainbowbeams" or cmd == "rb" then
+        StartRainbow()
+        Rayfield:Notify({ Title = "Rainbow Beam", Content = "Enabled", Duration = 2 })
+
+    elseif cmd == "unrainbowbeams" or cmd == "unrb" then
+        StopRainbow()
+        Rayfield:Notify({ Title = "Rainbow Beam", Content = "Disabled", Duration = 2 })
+
+    elseif cmd == "teleportz" or cmd == "tpz" then
+        TeleportActive = true
+        TPButton.Visible = true
+        LockBtn.Visible = true
+        Rayfield:Notify({ Title = "Teleport", Content = "Enabled — Tap TP button", Duration = 2 })
+
+    elseif cmd == "unteleportz" or cmd == "untpz" then
+        TeleportActive = false
+        TPButton.Visible = false
+        LockBtn.Visible = false
+        Rayfield:Notify({ Title = "Teleport", Content = "Disabled", Duration = 2 })
+
+    elseif cmd == "rejoin" or cmd == "rj" then
+        local TeleportService = game:GetService("TeleportService")
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+
+    elseif cmd == "reset" or cmd == "respawn" or cmd == "rs" then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").Health = 0
+        end
+
+    elseif cmd == "noclip" then
+        NoclipEnabled = true
+        Rayfield:Notify({ Title = "Noclip", Content = "Enabled", Duration = 2 })
+
+    elseif cmd == "unnoclip" then
+        NoclipEnabled = false
+        if LocalPlayer.Character then
+            for _, Part in pairs(LocalPlayer.Character:GetDescendants()) do
+                if Part:IsA("BasePart") then Part.CanCollide = true end
+            end
+        end
+        Rayfield:Notify({ Title = "Noclip", Content = "Disabled", Duration = 2 })
+
+    elseif cmd == "cmdbar" then
+        SetCmdBar(not CmdBarEnabled)
+    end
+end
+
+-- Chat listener
+local TextChatService = game:GetService("TextChatService")
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+    TextChatService.OnIncomingMessage = function(msg)
+        if msg.TextSource and msg.TextSource.UserId == LocalPlayer.UserId then
+            local text = msg.Text
+            if text:sub(1,1) == CurrentPrefix then
+                handleCommand(text:sub(2))
+            end
+        end
+    end
+else
+    LocalPlayer.Chatted:Connect(function(msg)
+        if msg:sub(1,1) == CurrentPrefix then
+            handleCommand(msg:sub(2))
+        end
+    end)
+end
+
+-- ========== SETTINGS TAB ==========
+local SettingsTab = Window:CreateTab("Settings", "settings")
+SettingsTab:CreateSection("Command Prefix")
+SettingsTab:CreateLabel("Prefix is fixed to:  /")
+SettingsTab:CreateLabel("Example: /ws 200  or  /rb")
+SettingsTab:CreateLabel("Use /cmdbar to toggle the command bar")
+SettingsTab:CreateSection("About")
+SettingsTab:CreateLabel("Hub by Johan")
+
+-- ========== SIGMA PLAYER TAB ==========
+local SigmaPlayerTab = Window:CreateTab("Sigma Player", "user")
+
+SigmaPlayerTab:CreateSection("Movement")
+SigmaPlayerTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Flag = "InfiniteJump",
+    Callback = function(State) InfiniteJumpEnabled = State end
+})
+
+SigmaPlayerTab:CreateToggle({
+    Name = "WalkSpeed On/Off",
+    CurrentValue = false,
+    Flag = "WalkSpeedToggle",
+    Callback = function(State)
+        WalkSpeedEnabled = State
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = State and CurrentWalkSpeed or 16
+        end
+    end
+})
+SigmaPlayerTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 1000},
+    Increment = 1,
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Flag = "WalkSpeedSlider",
+    Callback = function(Speed)
+        CurrentWalkSpeed = Speed
+        if WalkSpeedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = Speed
+        end
+        LocalPlayer.CharacterAdded:Connect(function(Char)
+            if WalkSpeedEnabled then Char:WaitForChild("Humanoid").WalkSpeed = Speed end
+        end)
+    end
+})
+
+SigmaPlayerTab:CreateToggle({
+    Name = "JumpPower On/Off",
+    CurrentValue = false,
+    Flag = "JumpPowerToggle",
+    Callback = function(State)
+        JumpPowerEnabled = State
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = State and CurrentJumpPower or 50
+        end
+    end
+})
+SigmaPlayerTab:CreateSlider({
+    Name = "JumpPower",
+    Range = {20, 1000},
+    Increment = 1,
+    Suffix = "Power",
+    CurrentValue = 50,
+    Flag = "JumpPowerSlider",
+    Callback = function(Power)
+        CurrentJumpPower = Power
+        if JumpPowerEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = Power
+        end
+    end
+})
+
+SigmaPlayerTab:CreateSection("Teleport")
+SigmaPlayerTab:CreateToggle({
+    Name = "Teleport Z On/Off",
+    CurrentValue = false,
+    Flag = "TeleportZ",
+    Callback = function(State)
+        TeleportActive = State
+        TPButton.Visible = State
+        LockBtn.Visible = State
+    end
+})
+
+SigmaPlayerTab:CreateSection("Rainbow Line")
+SigmaPlayerTab:CreateToggle({
+    Name = "Rainbow Beam On/Off",
+    CurrentValue = false,
+    Flag = "RainbowBeam",
+    Callback = function(State)
+        if State then StartRainbow() else StopRainbow() end
+    end
+})
+
+SigmaPlayerTab:CreateSection("Typing")
+SigmaPlayerTab:CreateToggle({
+    Name = "Fake Typing On/Off",
+    CurrentValue = false,
+    Flag = "FakeTyping",
+    Callback = function(State)
+        if State then StartFakeTyping() else StopFakeTyping() end
+    end
+})
+SigmaPlayerTab:CreateToggle({
+    Name = "Fire Animation On/Off",
+    CurrentValue = false,
+    Flag = "FireAnimation",
+    Callback = function(State)
+        FireAnimActive = State
+        if FireAnimationTrack then
+            if State then FireAnimationTrack:Play() else FireAnimationTrack:Stop() end
+        end
+    end
+})
+
+SigmaPlayerTab:CreateSection("Player")
+SigmaPlayerTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        local TeleportService = game:GetService("TeleportService")
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end
+})
+SigmaPlayerTab:CreateButton({
+    Name = "Reset / Respawn",
+    Callback = function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").Health = 0
+        end
+    end
+})
+SigmaPlayerTab:CreateToggle({
+    Name = "Command Bar On/Off",
+    CurrentValue = false,
+    Flag = "CmdBarToggle",
+    Callback = function(State)
+        SetCmdBar(State)
+    end
+})
+
+-- ========== COMMANDS TAB ==========
+local CommandsTab = Window:CreateTab("Commands", "terminal")
+
+CommandsTab:CreateSection("Movement")
+CommandsTab:CreateLabel("/walkspeed [1-1000]  or  /ws [1-1000]")
+CommandsTab:CreateLabel("/jumppower [1-1000]  or  /jp [1-1000]")
+CommandsTab:CreateLabel("/noclip")
+CommandsTab:CreateLabel("/unnoclip")
+
+CommandsTab:CreateSection("Animations & Effects")
+CommandsTab:CreateLabel("/fireanimations  or  /fireanims")
+CommandsTab:CreateLabel("/unfireanimations  or  /unfireanims")
+CommandsTab:CreateLabel("/faketyping  or  /fy")
+CommandsTab:CreateLabel("/unfaketyping  or  /unfy")
+CommandsTab:CreateLabel("/rainbowbeams  or  /rb")
+CommandsTab:CreateLabel("/unrainbowbeams  or  /unrb")
+
+CommandsTab:CreateSection("Teleport")
+CommandsTab:CreateLabel("/teleportz  or  /tpz")
+CommandsTab:CreateLabel("/unteleportz  or  /untpz")
+
+CommandsTab:CreateSection("Utility")
+CommandsTab:CreateLabel("/cmdbar  —  Toggle command bar")
+
+Rayfield:LoadConfiguration()
