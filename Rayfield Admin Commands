@@ -397,6 +397,14 @@ function handleCommand(msg)
     end
 end
 
+elseif cmd == "infinitejump" or cmd == "infjump" then
+        InfiniteJumpEnabled = true
+        Rayfield:Notify({ Title = "Infinite Jump", Content = "Enabled", Duration = 2 })
+
+    elseif cmd == "uninfinitejump" or cmd == "uninfjump" then
+        InfiniteJumpEnabled = false
+        Rayfield:Notify({ Title = "Infinite Jump", Content = "Disabled", Duration = 2 })
+
 -- Chat listener
 local TextChatService = game:GetService("TextChatService")
 if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
@@ -559,6 +567,7 @@ SigmaPlayerTab:CreateToggle({
     end
 })
 
+
 -- ========== COMMANDS TAB ==========
 local CommandsTab = Window:CreateTab("Commands", "terminal")
 
@@ -567,6 +576,8 @@ CommandsTab:CreateLabel("/walkspeed [1-1000]  or  /ws [1-1000]")
 CommandsTab:CreateLabel("/jumppower [1-1000]  or  /jp [1-1000]")
 CommandsTab:CreateLabel("/noclip")
 CommandsTab:CreateLabel("/unnoclip")
+CommandsTab:CreateLabel("/infinitejump  or  /infjump")
+CommandsTab:CreateLabel("/uninfinitejump  or  /uninfjump")
 
 CommandsTab:CreateSection("Animations & Effects")
 CommandsTab:CreateLabel("/fireanimations  or  /fireanims")
