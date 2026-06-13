@@ -15,7 +15,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local CurrentPrefix = "/"
+local CurrentPrefix = ":"
 
 -- ========== STATE ==========
 local InfiniteJumpEnabled = false
@@ -29,6 +29,8 @@ local JumpPowerEnabled = false
 local CmdBarEnabled = false
 local CurrentWalkSpeed = 16
 local CurrentJumpPower = 50
+local LagEnabled = false
+local LagIntensity = 5
 
 local FireAnimationTrack = nil
 local UpdateLineColorsEvent = nil
@@ -44,6 +46,36 @@ pcall(function()
     local FireFlailAnimation = game:GetService("ReplicatedFirst"):WaitForChild("CatchFire"):WaitForChild("FireFlailAnimation")
     FireAnimationTrack = Animator:LoadAnimation(FireFlailAnimation)
 end)
+
+-- ========== LAG FUNCTION ==========
+function StartLag()
+    task.spawn(function()
+        while LagEnabled do
+            for i = 1, LagIntensity do
+                pcall(function()
+                    local tempPart = Instance.new("Part")
+                    tempPart.CanCollide = false
+                    tempPart.Transparency = 1
+                    tempPart.Anchored = true
+                    tempPart.Parent = workspace
+                    game:GetService("Debris"):AddItem(tempPart, 0.1)
+                    
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                        local hum = LocalPlayer.Character.Humanoid
+                        for _ = 1, 3 do
+                            hum:LoadAnimation(Instance.new("Animation")):Play()
+                        end
+                    end
+                end)
+            end
+            task.wait(0.05)
+        end
+    end)
+end
+
+function StopLag()
+    LagEnabled = false
+end
 
 -- ========== HELPERS ==========
 local function RandomColor() return Color3.new(math.random(), math.random(), math.random()) end
@@ -269,7 +301,7 @@ PrefixLabel.Size = UDim2.new(0, 24, 1, 0)
 PrefixLabel.Position = UDim2.new(0, 8, 0, 0)
 PrefixLabel.BackgroundTransparency = 1
 PrefixLabel.TextColor3 = Color3.fromRGB(100, 100, 255)
-PrefixLabel.Text = "/"
+PrefixLabel.Text = ":"
 PrefixLabel.Font = Enum.Font.GothamBold
 PrefixLabel.TextSize = 18
 PrefixLabel.Parent = CmdFrame
@@ -370,6 +402,20 @@ function handleCommand(msg)
         LockBtn.Visible = false
         Rayfield:Notify({ Title = "Teleport", Content = "Disabled", Duration = 2 })
 
+    elseif cmd == "lagserver" then
+    local intensity = tonumber(parts[2])
+    if intensity and intensity <= 1000 then
+        LagIntensity = math.clamp(intensity, 1, 1000)
+    end
+    LagEnabled = true
+    StartLag()
+    Rayfield:Notify({ Title = "Lag Server", Content = "Enabled at intensity " .. LagIntensity, Duration = 2 })
+
+elseif cmd == "unlagserver" then
+    LagEnabled = false
+    StopLag()
+    Rayfield:Notify({ Title = "Lag Server", Content = "Disabled", Duration = 2 })
+
     elseif cmd == "rejoin" or cmd == "rj" then
         local TeleportService = game:GetService("TeleportService")
         TeleportService:Teleport(game.PlaceId, LocalPlayer)
@@ -427,9 +473,9 @@ end
 -- ========== SETTINGS TAB ==========
 local SettingsTab = Window:CreateTab("Settings", "settings")
 SettingsTab:CreateSection("Command Prefix")
-SettingsTab:CreateLabel("Prefix is fixed to:  /")
-SettingsTab:CreateLabel("Example: /ws 200  or  /rb")
-SettingsTab:CreateLabel("Use /cmdbar to toggle the command bar")
+SettingsTab:CreateLabel("Prefix is fixed to:  :")
+SettingsTab:CreateLabel("Example: :ws 200  or  :rb")
+SettingsTab:CreateLabel("Use :cmdbar to toggle the command bar")
 SettingsTab:CreateSection("About")
 SettingsTab:CreateLabel("Hub by Johan")
 
@@ -567,31 +613,65 @@ SigmaPlayerTab:CreateToggle({
     end
 })
 
+-- ========== LAG TAB ==========
+local LagTab = Window:CreateTab("Lag Server", "dashboard")
+
+LagTab:CreateSection("Server Lag Control")
+LagTab:CreateToggle({
+    Name = "Enable Server Lag",
+    CurrentValue = false,
+    Flag = "LagToggle",
+    Callback = function(State)
+        if State then
+            LagEnabled = true
+            StartLag()
+        else
+            LagEnabled = false
+            StopLag()
+        end
+    end
+})
+
+LagTab:CreateSlider({
+    Name = "Lag Intensity",
+    Range = {1, 1000},
+    Increment = 1,
+    Suffix = "Power",
+    CurrentValue = 5,
+    Flag = "LagIntensity",
+    Callback = function(Value)
+        LagIntensity = Value
+    end
+})
 
 -- ========== COMMANDS TAB ==========
 local CommandsTab = Window:CreateTab("Commands", "terminal")
 
 CommandsTab:CreateSection("Movement")
-CommandsTab:CreateLabel("/walkspeed [1-1000]  or  /ws [1-1000]")
-CommandsTab:CreateLabel("/jumppower [1-1000]  or  /jp [1-1000]")
-CommandsTab:CreateLabel("/noclip")
-CommandsTab:CreateLabel("/unnoclip")
-CommandsTab:CreateLabel("/infinitejump  or  /infjump")
-CommandsTab:CreateLabel("/uninfinitejump  or  /uninfjump")
+CommandsTab:CreateLabel(":walkspeed [1-1000]  or  :ws [1-1000]")
+CommandsTab:CreateLabel(":jumppower [1-1000]  or  :jp [1-1000]")
+CommandsTab:CreateLabel(":noclip")
+CommandsTab:CreateLabel(":unnoclip")
+CommandsTab:CreateLabel(":infinitejump  or  :infjump")
+CommandsTab:CreateLabel(":uninfinitejump  or  :uninfjump")
 
 CommandsTab:CreateSection("Animations & Effects")
-CommandsTab:CreateLabel("/fireanimations  or  /fireanims")
-CommandsTab:CreateLabel("/unfireanimations  or  /unfireanims")
-CommandsTab:CreateLabel("/faketyping  or  /fy")
-CommandsTab:CreateLabel("/unfaketyping  or  /unfy")
-CommandsTab:CreateLabel("/rainbowbeams  or  /rb")
-CommandsTab:CreateLabel("/unrainbowbeams  or  /unrb")
+CommandsTab:CreateLabel(":fireanimations  or  :fireanims")
+CommandsTab:CreateLabel(":unfireanimations  or  :unfireanims")
+CommandsTab:CreateLabel(":faketyping  or  :fy")
+CommandsTab:CreateLabel(":unfaketyping  or  :unfy")
+CommandsTab:CreateLabel(":rainbowbeams  or  :rb")
+CommandsTab:CreateLabel(":unrainbowbeams  or  :unrb")
 
 CommandsTab:CreateSection("Teleport")
-CommandsTab:CreateLabel("/teleportz  or  /tpz")
-CommandsTab:CreateLabel("/unteleportz  or  /untpz")
+CommandsTab:CreateLabel(":teleportz  or  :tpz")
+CommandsTab:CreateLabel(":unteleportz  or  :untpz")
+
+CommandsTab:CreateSection("Server Lag")
+CommandsTab:CreateLabel(":lagserver [1-1000]  —  Lag the server")
+CommandsTab:CreateLabel(":unlagserver  —  Stop lag")
 
 CommandsTab:CreateSection("Utility")
-CommandsTab:CreateLabel("/cmdbar  —  Toggle command bar")
+CommandsTab:CreateLabel(":cmdbar  —  Toggle command bar")
 
 Rayfield:LoadConfiguration()
