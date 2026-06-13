@@ -448,16 +448,16 @@ function handleCommand(msg)
 
     elseif cmd == "cmdbar" then
         SetCmdBar(not CmdBarEnabled)
-    end
-end
 
-elseif cmd == "infinitejump" or cmd == "infjump" then
+    elseif cmd == "infinitejump" or cmd == "infjump" then
         InfiniteJumpEnabled = true
         Rayfield:Notify({ Title = "Infinite Jump", Content = "Enabled", Duration = 2 })
 
     elseif cmd == "uninfinitejump" or cmd == "uninfjump" then
         InfiniteJumpEnabled = false
         Rayfield:Notify({ Title = "Infinite Jump", Content = "Disabled", Duration = 2 })
+    end
+end
 
 -- Chat listener
 local TextChatService = game:GetService("TextChatService")
