@@ -29,8 +29,6 @@ local JumpPowerEnabled = false
 local CmdBarEnabled = false
 local CurrentWalkSpeed = 16
 local CurrentJumpPower = 50
-local LagEnabled = false
-local LagIntensity = 5
 
 local FireAnimationTrack = nil
 local UpdateLineColorsEvent = nil
@@ -47,33 +45,67 @@ pcall(function()
     FireAnimationTrack = Animator:LoadAnimation(FireFlailAnimation)
 end)
 
--- ========== LAG FUNCTION ==========
-function StartLag()
-    task.spawn(function()
-        while LagEnabled do
-            for i = 1, LagIntensity do
-                pcall(function()
-                    local tempPart = Instance.new("Part")
-                    tempPart.CanCollide = false
-                    tempPart.Transparency = 1
-                    tempPart.Anchored = true
-                    tempPart.Parent = workspace
-                    game:GetService("Debris"):AddItem(tempPart, 0.1)
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                        local hum = LocalPlayer.Character.Humanoid
-                        for _ = 1, 3 do
-                            hum:LoadAnimation(Instance.new("Animation")):Play()
-                        end
-                    end
-                end)
+-- ========== BRING FUNCTIONS ==========
+local BringAllEnabled = false
+
+local function FindPlayer(query)
+    query = query:lower()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if player.Name:lower() == query or player.DisplayName:lower() == query
+            or player.Name:lower():sub(1, #query) == query or player.DisplayName:lower():sub(1, #query) == query then
+                return player
             end
-            task.wait(0.05)
         end
-    end)
+    end
+    return nil
 end
 
-function StopLag()
-    LagEnabled = false
+local function BringOne(target)
+    if not target or not target.Character then return end
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot or not targetRoot then return end
+
+    myChar:PivotTo(targetRoot.CFrame * CFrame.new(0, -6, 0))
+    for _, part in pairs(myChar:GetDescendants()) do
+        if part:IsA("BasePart") then part.CanCollide = false end
+    end
+    for i = 1, 20 do
+        pcall(function()
+            ReplicatedStorage.GrabEvents.SetNetworkOwner:FireServer(targetRoot, myRoot.CFrame)
+        end)
+        task.wait(0.15)
+    end
+end
+
+local function BringAll()
+    BringAllEnabled = true
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    local savedCam = workspace.CurrentCamera.CFrame
+    workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+    workspace.CurrentCamera.CFrame = savedCam
+
+    local queue = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(queue, player)
+        end
+    end
+
+    task.spawn(function()
+        while BringAllEnabled and #queue > 0 do
+            local target = table.remove(queue, 1)
+            BringOne(target)
+            task.wait(0.1)
+        end
+        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+        BringAllEnabled = false
+    end)
 end
 
 -- ========== HELPERS ==========
@@ -354,6 +386,27 @@ local function handleCommand(msg)
             Rayfield:Notify({ Title = "JumpPower", Content = "Set to " .. CurrentJumpPower, Duration = 2 })
         end
 
+    elseif cmd == "bring" then
+        local arg = parts[2]
+        if not arg then
+            Rayfield:Notify({ Title = "Bring", Content = "Usage: :bring [name/nickname/all]", Duration = 3 })
+        elseif arg == "all" then
+            Rayfield:Notify({ Title = "Bring All", Content = "Bringing all players...", Duration = 2 })
+            BringAll()
+        else
+            local target = FindPlayer(arg)
+            if target then
+                Rayfield:Notify({ Title = "Bring", Content = "Bringing " .. target.Name, Duration = 2 })
+                task.spawn(function() BringOne(target) end)
+            else
+                Rayfield:Notify({ Title = "Bring", Content = "Player not found: " .. arg, Duration = 2 })
+            end
+        end
+
+    elseif cmd == "unbring" then
+        BringAllEnabled = false
+        Rayfield:Notify({ Title = "Bring", Content = "Stopped bringing players.", Duration = 2 })
+
     elseif cmd == "fireanimations" or cmd == "fireanims" then
         FireAnimActive = true
         if FireAnimationTrack then FireAnimationTrack:Play() end
@@ -391,20 +444,6 @@ local function handleCommand(msg)
         TPButton.Visible = false
         LockBtn.Visible = false
         Rayfield:Notify({ Title = "Teleport", Content = "Disabled", Duration = 2 })
-
-    elseif cmd == "lagserver" then
-        local intensity = tonumber(parts[2])
-        if intensity and intensity <= 1000 then
-            LagIntensity = math.clamp(intensity, 1, 1000)
-        end
-        LagEnabled = true
-        StartLag()
-        Rayfield:Notify({ Title = "Lag Server", Content = "Enabled at intensity " .. LagIntensity, Duration = 2 })
-
-    elseif cmd == "unlagserver" then
-        LagEnabled = false
-        StopLag()
-        Rayfield:Notify({ Title = "Lag Server", Content = "Disabled", Duration = 2 })
 
     elseif cmd == "infinitejump" or cmd == "infjump" then
         InfiniteJumpEnabled = true
@@ -611,47 +650,21 @@ SigmaPlayerTab:CreateToggle({
     end
 })
 
--- ========== TAB 3: LAG SERVER ==========
-local LagTab = Window:CreateTab("Lag Server", "dashboard")
-
-LagTab:CreateSection("Server Lag Control")
-LagTab:CreateToggle({
-    Name = "Enable Server Lag",
-    CurrentValue = false,
-    Flag = "LagToggle",
-    Callback = function(State)
-        if State then
-            LagEnabled = true
-            StartLag()
-        else
-            LagEnabled = false
-            StopLag()
-        end
-    end
-})
-
-LagTab:CreateSlider({
-    Name = "Lag Intensity",
-    Range = {1, 1000},
-    Increment = 1,
-    Suffix = "Power",
-    CurrentValue = 5,
-    Flag = "LagIntensity",
-    Callback = function(Value)
-        LagIntensity = Value
-    end
-})
-
--- ========== TAB 4: COMMANDS ==========
+-- ========== TAB 3: COMMANDS ==========
 local CommandsTab = Window:CreateTab("Commands", "terminal")
 
 CommandsTab:CreateSection("Movement")
 CommandsTab:CreateLabel(":walkspeed [1-1000]  or  :ws [1-1000]")
 CommandsTab:CreateLabel(":jumppower [1-1000]  or  :jp [1-1000]")
-CommandsTab:CreateLabel(":noclip")
-CommandsTab:CreateLabel(":unnoclip")
+CommandsTab:CreateLabel(":noclip  /  :unnoclip")
 CommandsTab:CreateLabel(":infinitejump  or  :infjump")
 CommandsTab:CreateLabel(":uninfinitejump  or  :uninfjump")
+
+CommandsTab:CreateSection("Bring")
+CommandsTab:CreateLabel(":bring [username]  â€”  Bring one player")
+CommandsTab:CreateLabel(":bring [nickname]  â€”  Bring by nickname")
+CommandsTab:CreateLabel(":bring all  â€”  Bring all players")
+CommandsTab:CreateLabel(":unbring  â€”  Stop bringing")
 
 CommandsTab:CreateSection("Animations & Effects")
 CommandsTab:CreateLabel(":fireanimations  or  :fireanims")
@@ -665,86 +678,9 @@ CommandsTab:CreateSection("Teleport")
 CommandsTab:CreateLabel(":teleportz  or  :tpz")
 CommandsTab:CreateLabel(":unteleportz  or  :untpz")
 
-CommandsTab:CreateSection("Server Lag")
-CommandsTab:CreateLabel(":lagserver [1-1000]  â€”  Lag the server")
-CommandsTab:CreateLabel(":unlagserver  â€”  Stop lag")
-
 CommandsTab:CreateSection("Utility")
+CommandsTab:CreateLabel(":rejoin  or  :rj")
+CommandsTab:CreateLabel(":reset  or  :rs")
 CommandsTab:CreateLabel(":cmdbar  â€”  Toggle command bar")
-
--- ========== TAB 5: CRASH SERVER ==========
-local CrashTab = Window:CreateTab("Crash Server", "zap")
-
-local CrashEnabled = false
-local CrashIntensity = 50
-
-CrashTab:CreateSection("Crash Control")
-
-CrashTab:CreateToggle({
-    Name = "Enable Crash",
-    CurrentValue = false,
-    Flag = "CrashToggle",
-    Callback = function(State)
-        CrashEnabled = State
-        if State then
-            Rayfield:Notify({ Title = "Crash Server", Content = "Crash started!", Duration = 3 })
-            task.spawn(function()
-                while CrashEnabled do
-                    for i = 1, CrashIntensity do
-                        pcall(function()
-                            -- Flood animations
-                            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                                local hum = LocalPlayer.Character.Humanoid
-                                for _ = 1, 10 do
-                                    pcall(function()
-                                        local anim = Instance.new("Animation")
-                                        anim.AnimationId = "rbxassetid://0"
-                                        hum:LoadAnimation(anim):Play()
-                                    end)
-                                end
-                            end
-                            -- Flood parts
-                            local p = Instance.new("Part")
-                            p.CanCollide = false
-                            p.Transparency = 1
-                            p.Anchored = true
-                            p.Parent = workspace
-                            game:GetService("Debris"):AddItem(p, 0.01)
-                            -- Flood RemoteEvents
-                            pcall(function()
-                                for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-                                    if v:IsA("RemoteEvent") then
-                                        for _ = 1, 3 do
-                                            v:FireServer()
-                                        end
-                                    end
-                                end
-                            end)
-                        end)
-                    end
-                    task.wait(0.01)
-                end
-            end)
-        else
-            Rayfield:Notify({ Title = "Crash Server", Content = "Crash stopped.", Duration = 2 })
-        end
-    end
-})
-
-CrashTab:CreateSlider({
-    Name = "Crash Intensity",
-    Range = {1, 200},
-    Increment = 1,
-    Suffix = "Power",
-    CurrentValue = 50,
-    Flag = "CrashIntensity",
-    Callback = function(Value)
-        CrashIntensity = Value
-    end
-})
-
-CrashTab:CreateSection("Warning")
-CrashTab:CreateLabel("High intensity may disconnect you too.")
-CrashTab:CreateLabel("Use at your own risk.")
 
 Rayfield:LoadConfiguration()
