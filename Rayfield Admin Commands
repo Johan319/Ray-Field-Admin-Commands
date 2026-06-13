@@ -403,18 +403,26 @@ function handleCommand(msg)
         Rayfield:Notify({ Title = "Teleport", Content = "Disabled", Duration = 2 })
 
     elseif cmd == "lagserver" then
-    local intensity = tonumber(parts[2])
-    if intensity and intensity <= 1000 then
-        LagIntensity = math.clamp(intensity, 1, 1000)
-    end
-    LagEnabled = true
-    StartLag()
-    Rayfield:Notify({ Title = "Lag Server", Content = "Enabled at intensity " .. LagIntensity, Duration = 2 })
+        local intensity = tonumber(parts[2])
+        if intensity and intensity <= 1000 then
+            LagIntensity = math.clamp(intensity, 1, 1000)
+        end
+        LagEnabled = true
+        StartLag()
+        Rayfield:Notify({ Title = "Lag Server", Content = "Enabled at intensity " .. LagIntensity, Duration = 2 })
 
-elseif cmd == "unlagserver" then
-    LagEnabled = false
-    StopLag()
-    Rayfield:Notify({ Title = "Lag Server", Content = "Disabled", Duration = 2 })
+    elseif cmd == "unlagserver" then
+        LagEnabled = false
+        StopLag()
+        Rayfield:Notify({ Title = "Lag Server", Content = "Disabled", Duration = 2 })
+
+    elseif cmd == "infinitejump" or cmd == "infjump" then
+        InfiniteJumpEnabled = true
+        Rayfield:Notify({ Title = "Infinite Jump", Content = "Enabled", Duration = 2 })
+
+    elseif cmd == "uninfinitejump" or cmd == "uninfjump" then
+        InfiniteJumpEnabled = false
+        Rayfield:Notify({ Title = "Infinite Jump", Content = "Disabled", Duration = 2 })
 
     elseif cmd == "rejoin" or cmd == "rj" then
         local TeleportService = game:GetService("TeleportService")
